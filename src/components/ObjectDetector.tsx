@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { initializeTensorFlow } from '../utils/tfjs-init';
 import CameraControls from './CameraControls';
-import SourceSelector, { VideoSource } from './SourceSelector';
+import { SourceSelector, VideoSource } from './SourceSelector';
 import ModelSelector, { ModelInfo } from './ModelSelector';
 import ModelService from '../services/ModelService';
 import './ObjectDetector.css';
@@ -33,9 +34,65 @@ const ObjectDetector: React.FC = () => {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
   const modelService = ModelService.getInstance();
+  const animationFrameRef = useRef<number>();
+
+  /**
+   * Effectue la détection d'objets sur une frame
+   */
+  const detectObjects = async () => {
+    if (!videoRef.current || !canvasRef.current || isPaused) return;
+
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    try {
+      ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      const predictions = await modelService.detect(canvasRef.current);
+      
+      predictions.forEach((prediction: Detection) => {
+        const [x, y, width, height] = prediction.bbox;
+        const score = Math.round(prediction.score * 100);
+        const hue = (score * 1.2);
+        const color = `hsl(${hue}, 100%, 50%)`;
+        
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+        
+        ctx.fillStyle = color;
+        ctx.font = 'bold 16px Inter';
+        const text = `${prediction.class} (${score}%)`;
+        const textWidth = ctx.measureText(text).width;
+        const textHeight = 20;
+        const padding = 4;
+        
+        ctx.fillRect(
+          x,
+          y > textHeight + padding ? y - textHeight - padding : y,
+          textWidth + padding * 2,
+          textHeight + padding * 2
+        );
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(
+          text,
+          x + padding,
+          y > textHeight + padding ? y - padding : y + textHeight + padding
+        );
+      });
+
+      if (!isPaused) {
+        animationFrameRef.current = requestAnimationFrame(detectObjects);
+      }
+    } catch (err) {
+      console.error('Erreur lors de la détection:', err);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    }
+  };
 
   useEffect(() => {
-    let animationFrameId: number;
     let currentStream: MediaStream | null = null;
 
     /**
@@ -141,68 +198,14 @@ const ObjectDetector: React.FC = () => {
       }
     };
 
-    /**
-     * Effectue la détection d'objets sur une frame
-     */
-    const detectObjects = async () => {
-      if (!videoRef.current || !canvasRef.current || isPaused) return;
-
-      const ctx = canvasRef.current.getContext('2d');
-      if (!ctx) return;
-
-      try {
-        ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        const predictions = await modelService.detect(canvasRef.current);
-        
-        predictions.forEach((prediction: Detection) => {
-          const [x, y, width, height] = prediction.bbox;
-          const score = Math.round(prediction.score * 100);
-          const hue = (score * 1.2);
-          const color = `hsl(${hue}, 100%, 50%)`;
-          
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, width, height);
-          
-          ctx.fillStyle = color;
-          ctx.font = 'bold 16px Inter';
-          const text = `${prediction.class} (${score}%)`;
-          const textWidth = ctx.measureText(text).width;
-          const textHeight = 20;
-          const padding = 4;
-          
-          ctx.fillRect(
-            x,
-            y > textHeight + padding ? y - textHeight - padding : y,
-            textWidth + padding * 2,
-            textHeight + padding * 2
-          );
-          
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(
-            text,
-            x + padding,
-            y > textHeight + padding ? y - padding : y + textHeight + padding
-          );
-        });
-
-        if (!isPaused) {
-          animationFrameId = requestAnimationFrame(detectObjects);
-        }
-      } catch (err) {
-        console.error('Erreur lors de la détection:', err);
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-
     // Initialisation
     initialize();
     getAvailableCameras();
 
     // Nettoyage
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
@@ -242,28 +245,12 @@ const ObjectDetector: React.FC = () => {
   };
 
   /**
-   * Gère l'ajout d'une caméra IP
+   * Gère l'ajout d'une nouvelle source
    */
-  const handleAddIPCamera = (url: string) => {
+  const handleAddSource = (source: Omit<VideoSource, 'id'>) => {
     const newSource: VideoSource = {
-      id: `ipcam-${Date.now()}`,
-      type: 'ipcam',
-      name: `Caméra IP ${sources.filter(s => s.type === 'ipcam').length + 1}`,
-      url
-    };
-    setSources(prev => [...prev, newSource]);
-    handleSourceChange(newSource);
-  };
-
-  /**
-   * Gère l'ajout d'un drone
-   */
-  const handleAddDrone = (url: string) => {
-    const newSource: VideoSource = {
-      id: `drone-${Date.now()}`,
-      type: 'drone',
-      name: `Drone ${sources.filter(s => s.type === 'drone').length + 1}`,
-      url
+      ...source,
+      id: `${source.type}-${Date.now()}`
     };
     setSources(prev => [...prev, newSource]);
     handleSourceChange(newSource);
@@ -295,8 +282,7 @@ const ObjectDetector: React.FC = () => {
           sources={sources}
           currentSource={currentSource}
           onSourceChange={handleSourceChange}
-          onAddIPCamera={handleAddIPCamera}
-          onAddDrone={handleAddDrone}
+          onAddSource={handleAddSource}
         />
         <ModelSelector
           models={models}

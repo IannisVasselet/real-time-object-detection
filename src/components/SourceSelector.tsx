@@ -1,74 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SourceSelector.css';
 
 export interface VideoSource {
   id: string;
-  type: 'webcam' | 'ipcam' | 'drone';
   name: string;
+  type: 'webcam' | 'ipcam' | 'drone';
   url?: string;
   deviceId?: string;
+  icon: string;
 }
 
 interface SourceSelectorProps {
   sources: VideoSource[];
   currentSource: VideoSource | null;
   onSourceChange: (source: VideoSource) => void;
-  onAddIPCamera: (url: string) => void;
-  onAddDrone: (url: string) => void;
+  onAddSource: (source: Omit<VideoSource, 'id'>) => void;
 }
 
 /**
- * Composant pour sélectionner la source vidéo
- * @param {SourceSelectorProps} props - Les propriétés du composant
+ * Composant pour sélectionner et gérer les sources vidéo
  */
-const SourceSelector: React.FC<SourceSelectorProps> = ({
+export const SourceSelector: React.FC<SourceSelectorProps> = ({
   sources,
   currentSource,
   onSourceChange,
-  onAddIPCamera,
-  onAddDrone
+  onAddSource,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [newIPCameraUrl, setNewIPCameraUrl] = useState('');
-  const [newDroneUrl, setNewDroneUrl] = useState('');
-  const [showIPCameraForm, setShowIPCameraForm] = useState(false);
-  const [showDroneForm, setShowDroneForm] = useState(false);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourceType, setNewSourceType] = useState<'ipcam' | 'drone'>('ipcam');
+  const selectorRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Gère l'ajout d'une nouvelle caméra IP
-   */
-  const handleAddIPCamera = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newIPCameraUrl) {
-      onAddIPCamera(newIPCameraUrl);
-      setNewIPCameraUrl('');
-      setShowIPCameraForm(false);
-    }
+  // Fermer le menu si on clique en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setIsAddingSource(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSourceSelect = (source: VideoSource) => {
+    onSourceChange(source);
+    setIsOpen(false);
   };
 
-  /**
-   * Gère l'ajout d'un nouveau drone
-   */
-  const handleAddDrone = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newDroneUrl) {
-      onAddDrone(newDroneUrl);
-      setNewDroneUrl('');
-      setShowDroneForm(false);
+  const handleAddSource = () => {
+    if (newSourceUrl.trim()) {
+      onAddSource({
+        name: `${newSourceType === 'ipcam' ? 'IP Camera' : 'Drone'} ${sources.length + 1}`,
+        type: newSourceType,
+        url: newSourceUrl,
+        icon: newSourceType === 'ipcam' ? '📹' : '🚁',
+      });
+      setNewSourceUrl('');
+      setIsAddingSource(false);
     }
   };
 
   return (
-    <div className="source-selector">
+    <div className="source-selector" ref={selectorRef}>
       <div className="source-selector-header">
-        <button 
+        <button
           className="source-selector-button"
           onClick={() => setIsOpen(!isOpen)}
         >
-          <span className="source-selector-label">
-            {currentSource ? currentSource.name : 'Sélectionner une source'}
+          <span>
+            {currentSource ? (
+              <>
+                {currentSource.icon} {currentSource.name}
+              </>
+            ) : (
+              'Sélectionner une source'
+            )}
           </span>
-          <span className={`source-selector-arrow ${isOpen ? 'open' : ''}`}>▼</span>
+          <span className={`source-selector-arrow ${isOpen ? 'open' : ''}`}>
+            ▼
+          </span>
         </button>
       </div>
 
@@ -78,64 +91,46 @@ const SourceSelector: React.FC<SourceSelectorProps> = ({
             <button
               key={source.id}
               className={`source-option ${currentSource?.id === source.id ? 'active' : ''}`}
-              onClick={() => {
-                onSourceChange(source);
-                setIsOpen(false);
-              }}
+              onClick={() => handleSourceSelect(source)}
             >
-              <span className="source-icon">
-                {source.type === 'webcam' && '📹'}
-                {source.type === 'ipcam' && '🌐'}
-                {source.type === 'drone' && '🚁'}
-              </span>
+              <span className="source-icon">{source.icon}</span>
               {source.name}
             </button>
           ))}
 
           <div className="source-selector-actions">
-            <button
-              className="source-action-button"
-              onClick={() => setShowIPCameraForm(!showIPCameraForm)}
-            >
-              + Ajouter une caméra IP
-            </button>
-            <button
-              className="source-action-button"
-              onClick={() => setShowDroneForm(!showDroneForm)}
-            >
-              + Ajouter un drone
-            </button>
+            {!isAddingSource ? (
+              <button
+                className="source-action-button"
+                onClick={() => setIsAddingSource(true)}
+              >
+                + Ajouter une source
+              </button>
+            ) : (
+              <div className="source-form">
+                <select
+                  className="source-input"
+                  value={newSourceType}
+                  onChange={(e) => setNewSourceType(e.target.value as 'ipcam' | 'drone')}
+                >
+                  <option value="ipcam">IP Camera</option>
+                  <option value="drone">Drone</option>
+                </select>
+                <input
+                  type="text"
+                  className="source-input"
+                  placeholder="URL de la source"
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                />
+                <button className="source-submit" onClick={handleAddSource}>
+                  Ajouter
+                </button>
+              </div>
+            )}
           </div>
-
-          {showIPCameraForm && (
-            <form onSubmit={handleAddIPCamera} className="source-form">
-              <input
-                type="url"
-                placeholder="URL de la caméra IP"
-                value={newIPCameraUrl}
-                onChange={(e) => setNewIPCameraUrl(e.target.value)}
-                className="source-input"
-              />
-              <button type="submit" className="source-submit">Ajouter</button>
-            </form>
-          )}
-
-          {showDroneForm && (
-            <form onSubmit={handleAddDrone} className="source-form">
-              <input
-                type="url"
-                placeholder="URL du flux du drone"
-                value={newDroneUrl}
-                onChange={(e) => setNewDroneUrl(e.target.value)}
-                className="source-input"
-              />
-              <button type="submit" className="source-submit">Ajouter</button>
-            </form>
-          )}
         </div>
       )}
     </div>
   );
-};
-
-export default SourceSelector; 
+}; 

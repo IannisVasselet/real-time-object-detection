@@ -2,6 +2,7 @@
   position: relative;
   width: 100%;
   max-width: 300px;
+  z-index: 9999;
 }
 
 .source-selector-header {
@@ -24,12 +25,15 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: var(--shadow-md);
+  position: relative;
+  z-index: 9999;
 }
 
 .source-selector-button:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-surface);
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+  border-color: var(--color-primary);
 }
 
 .source-selector-arrow {
@@ -41,20 +45,21 @@
 }
 
 .source-selector-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: var(--spacing-sm);
+  position: fixed;
+  top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
   background: var(--color-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 1000;
+  z-index: 10000;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   max-height: 400px;
   overflow-y: auto;
+  margin-top: 4px;
 }
 
 .source-option {
@@ -78,7 +83,8 @@
 }
 
 .source-option:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-surface);
+  color: var(--color-primary);
 }
 
 .source-option.active {
@@ -111,7 +117,7 @@
 }
 
 .source-action-button:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-surface);
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
@@ -130,6 +136,12 @@
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text);
+}
+
+.source-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-light);
 }
 
 .source-submit {
