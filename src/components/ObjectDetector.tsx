@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { initializeTensorFlow } from '../utils/tfjs-init';
+import './ObjectDetector.css';
 
 /**
  * Interface pour les détections d'objets
@@ -97,16 +98,38 @@ const ObjectDetector: React.FC = () => {
         // Dessine les boîtes de détection
         predictions.forEach((prediction: Detection) => {
           const [x, y, width, height] = prediction.bbox;
-          ctx.strokeStyle = '#00ff00';
+          const score = Math.round(prediction.score * 100);
+          
+          // Couleur de la boîte basée sur le score
+          const hue = (score * 1.2); // 0-120 (rouge à vert)
+          const color = `hsl(${hue}, 100%, 50%)`;
+          
+          // Dessine la boîte
+          ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           ctx.strokeRect(x, y, width, height);
           
-          ctx.fillStyle = '#00ff00';
-          ctx.font = '16px Arial';
-          ctx.fillText(
-            `${prediction.class} (${Math.round(prediction.score * 100)}%)`,
+          // Dessine le fond du texte
+          ctx.fillStyle = color;
+          ctx.font = 'bold 16px Inter';
+          const text = `${prediction.class} (${score}%)`;
+          const textWidth = ctx.measureText(text).width;
+          const textHeight = 20;
+          const padding = 4;
+          
+          ctx.fillRect(
             x,
-            y > 10 ? y - 5 : 10
+            y > textHeight + padding ? y - textHeight - padding : y,
+            textWidth + padding * 2,
+            textHeight + padding * 2
+          );
+          
+          // Dessine le texte
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(
+            text,
+            x + padding,
+            y > textHeight + padding ? y - padding : y + textHeight + padding
           );
         });
 
@@ -155,7 +178,6 @@ const ObjectDetector: React.FC = () => {
         ref={canvasRef}
         width={640}
         height={480}
-        style={{ border: '1px solid #ccc' }}
       />
     </div>
   );
