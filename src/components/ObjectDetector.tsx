@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { initializeTensorFlow } from '../utils/tfjs-init';
 import CameraControls from './CameraControls';
 import SourceSelector, { VideoSource } from './SourceSelector';
+import ModelSelector, { ModelInfo } from './ModelSelector';
+import ModelService from '../services/ModelService';
 import './ObjectDetector.css';
 
 /**
  * Interface pour les détections d'objets
  */
 interface Detection {
-  bbox: [number, number, number, number];
+  bbox: [number, number, number];
   class: string;
   score: number;
 }
@@ -29,29 +30,36 @@ const ObjectDetector: React.FC = () => {
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const [sources, setSources] = useState<VideoSource[]>([]);
   const [currentSource, setCurrentSource] = useState<VideoSource | null>(null);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+  const modelService = ModelService.getInstance();
 
   useEffect(() => {
-    let model: cocoSsd.ObjectDetection | null = null;
     let animationFrameId: number;
     let currentStream: MediaStream | null = null;
 
     /**
-     * Initialise le modèle de détection d'objets
+     * Initialise l'application
      */
-    const initializeModel = async () => {
+    const initialize = async () => {
       try {
         await initializeTensorFlow();
-        console.log('Chargement du modèle...');
-        model = await cocoSsd.load();
-        console.log('Modèle chargé avec succès');
-        setIsLoading(false);
+        console.log('TensorFlow.js initialisé');
         
-        if (videoRef.current && videoRef.current.readyState === 4) {
-          detectObjects();
+        // Charger la liste des modèles disponibles
+        const availableModels = modelService.getAvailableModels();
+        setModels(availableModels);
+        
+        // Charger le modèle par défaut (COCO-SSD)
+        const defaultModel = availableModels.find(m => m.id === 'coco-ssd');
+        if (defaultModel) {
+          await handleModelChange(defaultModel);
         }
+        
+        setIsLoading(false);
       } catch (err) {
-        console.error('Erreur lors du chargement du modèle:', err);
-        setError('Erreur lors du chargement du modèle');
+        console.error('Erreur lors de l\'initialisation:', err);
+        setError('Erreur lors de l\'initialisation');
         setIsLoading(false);
       }
     };
@@ -99,7 +107,7 @@ const ObjectDetector: React.FC = () => {
           if (videoRef.current) {
             videoRef.current.src = url;
             videoRef.current.onloadeddata = () => {
-              if (model && !isPaused) {
+              if (!isPaused) {
                 detectObjects();
               }
             };
@@ -120,7 +128,7 @@ const ObjectDetector: React.FC = () => {
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.onloadeddata = () => {
-              if (model && !isPaused) {
+              if (!isPaused) {
                 detectObjects();
               }
             };
@@ -137,14 +145,14 @@ const ObjectDetector: React.FC = () => {
      * Effectue la détection d'objets sur une frame
      */
     const detectObjects = async () => {
-      if (!model || !videoRef.current || !canvasRef.current || isPaused) return;
+      if (!videoRef.current || !canvasRef.current || isPaused) return;
 
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
 
       try {
         ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        const predictions = await model.detect(canvasRef.current);
+        const predictions = await modelService.detect(canvasRef.current);
         
         predictions.forEach((prediction: Detection) => {
           const [x, y, width, height] = prediction.bbox;
@@ -188,7 +196,7 @@ const ObjectDetector: React.FC = () => {
     };
 
     // Initialisation
-    initializeModel();
+    initialize();
     getAvailableCameras();
 
     // Nettoyage
@@ -261,6 +269,25 @@ const ObjectDetector: React.FC = () => {
     handleSourceChange(newSource);
   };
 
+  /**
+   * Gère le changement de modèle
+   */
+  const handleModelChange = async (model: ModelInfo) => {
+    try {
+      setIsLoading(true);
+      await modelService.loadModel(model.id);
+      setCurrentModel(model);
+      if (!isPaused) {
+        detectObjects();
+      }
+    } catch (err) {
+      console.error('Erreur lors du changement de modèle:', err);
+      setError('Erreur lors du changement de modèle');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="detector-container">
       <div className="detector-header">
@@ -270,6 +297,12 @@ const ObjectDetector: React.FC = () => {
           onSourceChange={handleSourceChange}
           onAddIPCamera={handleAddIPCamera}
           onAddDrone={handleAddDrone}
+        />
+        <ModelSelector
+          models={models}
+          currentModel={currentModel}
+          onModelChange={handleModelChange}
+          isLoading={isLoading}
         />
       </div>
 

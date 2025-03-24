@@ -1,0 +1,58 @@
+.camera-controls {
+  position: absolute;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  display: flex;
+  gap: var(--spacing-md);
+  z-index: 20;
+}
+
+.control-button {
+  background: var(--color-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-lg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md);
+}
+
+.control-button:hover {
+  background: var(--color-surface-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.control-button:active {
+  transform: translateY(0);
+}
+
+/* Animation pour le bouton de changement de caméra */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.control-button[title="Changer de caméra"]:hover {
+  animation: rotate 1s linear infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .camera-controls {
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+  }
+
+  .control-button {
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-md);
+  }
+} 
