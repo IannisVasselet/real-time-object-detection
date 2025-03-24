@@ -3,19 +3,44 @@ import { PerformanceMetrics, FPSCounter, collectMetrics } from '../../utils/metr
 import './MetricsMonitor.css';
 
 /**
+ * Interface pour les métriques avec animation
+ */
+interface AnimatedMetric {
+  value: number;
+  isChanging: boolean;
+}
+
+/**
+ * Interface pour les métriques animées
+ */
+interface AnimatedMetrics {
+  fps: AnimatedMetric;
+  map: AnimatedMetric;
+  memory: AnimatedMetric;
+  cpu: AnimatedMetric;
+  gpu?: AnimatedMetric;
+}
+
+/**
  * Composant pour afficher les métriques en temps réel de la détection d'objets
  * @returns {JSX.Element} Le composant MetricsMonitor
  */
 const MetricsMonitor: React.FC = () => {
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({
+  const [metrics, setMetrics] = useState<AnimatedMetrics>({
+    fps: { value: 0, isChanging: false },
+    map: { value: 0, isChanging: false },
+    memory: { value: 0, isChanging: false },
+    cpu: { value: 0, isChanging: false },
+  });
+  
+  const fpsCounter = useRef(new FPSCounter());
+  const lastUpdate = useRef(performance.now());
+  const previousMetrics = useRef<PerformanceMetrics>({
     fps: 0,
     map: 0,
     memory: 0,
     cpu: 0,
   });
-  
-  const fpsCounter = useRef(new FPSCounter());
-  const lastUpdate = useRef(performance.now());
 
   /**
    * Met à jour les métriques en temps réel
@@ -32,16 +57,52 @@ const MetricsMonitor: React.FC = () => {
         // Mise à jour des autres métriques toutes les secondes
         if (delta >= 1000) {
           const systemMetrics = await collectMetrics();
-          setMetrics({
-            ...systemMetrics,
-            fps: currentFPS,
+          
+          // Mise à jour des métriques avec animation
+          setMetrics(prev => {
+            const newMetrics: AnimatedMetrics = {
+              fps: {
+                value: currentFPS,
+                isChanging: currentFPS !== previousMetrics.current.fps
+              },
+              map: {
+                value: systemMetrics.map,
+                isChanging: systemMetrics.map !== previousMetrics.current.map
+              },
+              memory: {
+                value: systemMetrics.memory,
+                isChanging: systemMetrics.memory !== previousMetrics.current.memory
+              },
+              cpu: {
+                value: systemMetrics.cpu,
+                isChanging: systemMetrics.cpu !== previousMetrics.current.cpu
+              }
+            };
+
+            if (systemMetrics.gpu) {
+              newMetrics.gpu = {
+                value: systemMetrics.gpu,
+                isChanging: systemMetrics.gpu !== previousMetrics.current.gpu
+              };
+            }
+
+            previousMetrics.current = {
+              fps: currentFPS,
+              ...systemMetrics
+            };
+
+            return newMetrics;
           });
+
           lastUpdate.current = now;
         } else {
           // Mise à jour uniquement des FPS
           setMetrics(prev => ({
             ...prev,
-            fps: currentFPS,
+            fps: {
+              value: currentFPS,
+              isChanging: currentFPS !== previousMetrics.current.fps
+            }
           }));
         }
       } catch (error) {
@@ -49,39 +110,34 @@ const MetricsMonitor: React.FC = () => {
       }
     };
 
-    const interval = setInterval(updateMetrics, 100); // Mise à jour plus fréquente pour les FPS
+    const interval = setInterval(updateMetrics, 100);
     return () => {
       clearInterval(interval);
       fpsCounter.current.reset();
     };
   }, []);
 
+  /**
+   * Rendu d'une carte de métrique
+   */
+  const renderMetricCard = (label: string, metric: AnimatedMetric) => (
+    <div className="metric-card">
+      <span className="metric-label">{label}</span>
+      <span className={`metric-value ${metric.isChanging ? 'changed' : ''}`}>
+        {metric.value}
+      </span>
+    </div>
+  );
+
   return (
     <div className="metrics-container">
       <h3>Métriques en Temps Réel</h3>
       <div className="metrics-grid">
-        <div className="metric-card">
-          <span className="metric-label">FPS</span>
-          <span className="metric-value">{metrics.fps}</span>
-        </div>
-        <div className="metric-card">
-          <span className="metric-label">mAP</span>
-          <span className="metric-value">{metrics.map}</span>
-        </div>
-        <div className="metric-card">
-          <span className="metric-label">Mémoire (MB)</span>
-          <span className="metric-value">{metrics.memory}</span>
-        </div>
-        <div className="metric-card">
-          <span className="metric-label">CPU (%)</span>
-          <span className="metric-value">{metrics.cpu}</span>
-        </div>
-        {metrics.gpu && (
-          <div className="metric-card">
-            <span className="metric-label">GPU (%)</span>
-            <span className="metric-value">{metrics.gpu}</span>
-          </div>
-        )}
+        {renderMetricCard('FPS', metrics.fps)}
+        {renderMetricCard('mAP', metrics.map)}
+        {renderMetricCard('Mémoire (MB)', metrics.memory)}
+        {renderMetricCard('CPU (%)', metrics.cpu)}
+        {metrics.gpu && renderMetricCard('GPU (%)', metrics.gpu)}
       </div>
     </div>
   );
