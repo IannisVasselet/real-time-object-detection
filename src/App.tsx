@@ -1,5 +1,6 @@
 import React from 'react';
 import ObjectDetector from './components/ObjectDetector';
+import MetricsMonitor from './components/Metrics/MetricsMonitor';
 import './App.css';
 
 /**
@@ -14,6 +15,7 @@ const App: React.FC = () => {
       </header>
       <main className="app-main">
         <ObjectDetector />
+        <MetricsMonitor />
       </main>
       <footer className="app-footer">
         <p>Développé avec React, TensorFlow.js et COCO-SSD</p>
