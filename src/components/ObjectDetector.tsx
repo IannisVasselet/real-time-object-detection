@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { initializeTensorFlow } from '../utils/tfjs-init';
+import CameraControls from './CameraControls';
 import './ObjectDetector.css';
 
 /**
@@ -21,25 +22,27 @@ const ObjectDetector: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
 
   useEffect(() => {
     let model: cocoSsd.ObjectDetection | null = null;
     let animationFrameId: number;
+    let currentStream: MediaStream | null = null;
 
     /**
      * Initialise le modèle de détection d'objets
      */
     const initializeModel = async () => {
       try {
-        // Initialise TensorFlow.js
         await initializeTensorFlow();
-        
         console.log('Chargement du modèle...');
         model = await cocoSsd.load();
         console.log('Modèle chargé avec succès');
         setIsLoading(false);
         
-        // Démarrer la détection une fois le modèle chargé
         if (videoRef.current && videoRef.current.readyState === 4) {
           detectObjects();
         }
@@ -51,23 +54,46 @@ const ObjectDetector: React.FC = () => {
     };
 
     /**
+     * Récupère la liste des caméras disponibles
+     */
+    const getAvailableCameras = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(cameras);
+        setHasMultipleCameras(cameras.length > 1);
+      } catch (err) {
+        console.error('Erreur lors de la récupération des caméras:', err);
+      }
+    };
+
+    /**
      * Configure la webcam
      */
-    const setupCamera = async () => {
+    const setupCamera = async (deviceId?: string) => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: 640,
-            height: 480,
-            facingMode: 'environment' // Utilise la caméra arrière si disponible
-          } 
-        });
+        // Arrêter le flux actuel s'il existe
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+        }
+
+        const constraints: MediaStreamConstraints = {
+          video: deviceId 
+            ? { deviceId: { exact: deviceId } }
+            : { 
+                width: 640,
+                height: 480,
+                facingMode: 'environment'
+              }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadeddata = () => {
-            // Démarrer la détection une fois la vidéo chargée et si le modèle est prêt
-            if (model) {
+            if (model && !isPaused) {
               detectObjects();
             }
           };
@@ -83,33 +109,25 @@ const ObjectDetector: React.FC = () => {
      * Effectue la détection d'objets sur une frame
      */
     const detectObjects = async () => {
-      if (!model || !videoRef.current || !canvasRef.current) return;
+      if (!model || !videoRef.current || !canvasRef.current || isPaused) return;
 
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
 
       try {
-        // Dessine la frame vidéo sur le canvas
         ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-
-        // Effectue la détection
         const predictions = await model.detect(canvasRef.current);
         
-        // Dessine les boîtes de détection
         predictions.forEach((prediction: Detection) => {
           const [x, y, width, height] = prediction.bbox;
           const score = Math.round(prediction.score * 100);
-          
-          // Couleur de la boîte basée sur le score
-          const hue = (score * 1.2); // 0-120 (rouge à vert)
+          const hue = (score * 1.2);
           const color = `hsl(${hue}, 100%, 50%)`;
           
-          // Dessine la boîte
           ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           ctx.strokeRect(x, y, width, height);
           
-          // Dessine le fond du texte
           ctx.fillStyle = color;
           ctx.font = 'bold 16px Inter';
           const text = `${prediction.class} (${score}%)`;
@@ -124,7 +142,6 @@ const ObjectDetector: React.FC = () => {
             textHeight + padding * 2
           );
           
-          // Dessine le texte
           ctx.fillStyle = '#ffffff';
           ctx.fillText(
             text,
@@ -133,8 +150,9 @@ const ObjectDetector: React.FC = () => {
           );
         });
 
-        // Continue la boucle de détection
-        animationFrameId = requestAnimationFrame(detectObjects);
+        if (!isPaused) {
+          animationFrameId = requestAnimationFrame(detectObjects);
+        }
       } catch (err) {
         console.error('Erreur lors de la détection:', err);
         cancelAnimationFrame(animationFrameId);
@@ -143,6 +161,7 @@ const ObjectDetector: React.FC = () => {
 
     // Initialisation
     initializeModel();
+    getAvailableCameras();
     setupCamera();
 
     // Nettoyage
@@ -150,12 +169,30 @@ const ObjectDetector: React.FC = () => {
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
       }
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach(track => track.stop());
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
+
+  /**
+   * Gère la mise en pause/reprise de la détection
+   */
+  const handleTogglePause = () => {
+    setIsPaused(!isPaused);
+    if (!isPaused) {
+      detectObjects();
+    }
+  };
+
+  /**
+   * Gère le changement de caméra
+   */
+  const handleSwitchCamera = () => {
+    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
+    setCurrentCameraIndex(nextIndex);
+    setupCamera(availableCameras[nextIndex].deviceId);
+  };
 
   return (
     <div className="detector-container">
@@ -178,6 +215,12 @@ const ObjectDetector: React.FC = () => {
         ref={canvasRef}
         width={640}
         height={480}
+      />
+      <CameraControls
+        onTogglePause={handleTogglePause}
+        onSwitchCamera={handleSwitchCamera}
+        isPaused={isPaused}
+        hasMultipleCameras={hasMultipleCameras}
       />
     </div>
   );
