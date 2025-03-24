@@ -1,5 +1,11 @@
 # Système de Reconnaissance d'Objets en Temps Réel
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18.2.0-blue.svg)](https://reactjs.org/)
+[![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-4.17.0-orange.svg)](https://www.tensorflow.org/js)
+[![Vite](https://img.shields.io/badge/Vite-5.1.0-646CFF.svg)](https://vitejs.dev/)
+
 Ce projet implémente un système de reconnaissance d'objets en temps réel utilisant l'apprentissage profond et la vision par ordinateur. Il permet de détecter et d'identifier des objets dans un flux vidéo en direct via la webcam.
 
 ## 🚀 Fonctionnalités
