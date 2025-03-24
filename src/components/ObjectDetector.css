@@ -1,0 +1,110 @@
+.detector-container {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 480px;
+  background: var(--color-surface-light);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+.detector-container canvas {
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 10;
+  background: var(--color-surface);
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn var(--transition-normal);
+}
+
+.loading p {
+  margin: var(--spacing-xs) 0;
+  color: var(--color-text);
+}
+
+.loading p:first-child {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: var(--font-size-lg);
+}
+
+.loading p:last-child {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4444;
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  border: 1px solid rgba(255, 0, 0, 0.2);
+  text-align: center;
+  z-index: 10;
+  animation: fadeIn var(--transition-normal);
+}
+
+/* Animation de chargement */
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.loading::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: var(--spacing-md) auto 0;
+  border: 3px solid var(--color-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .detector-container {
+    min-height: 360px;
+  }
+
+  .detector-container canvas {
+    width: 100%;
+    height: auto;
+  }
+
+  .loading {
+    width: 90%;
+    max-width: 300px;
+  }
+} 
